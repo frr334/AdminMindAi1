@@ -8,40 +8,36 @@ import { daysUntil, formatDate, greeting } from "@/lib/utils";
 import Link from "next/link";
 
 export default function DashboardPage() {
-  const { session, profile, db, gamification } = useAdmitMind();
+  const { session, profile, applications, deadlines, flashcards, essays, recommendations, gamification } = useAdmitMind();
   const uid = session!.userId;
-  const apps = db.applications.filter((a) => a.userId === uid);
-  const essays = db.essays.filter((e) => e.userId === uid);
-  const savedUnis = db.savedUniversities.filter((s) => s.userId === uid);
-  const recs = db.recommendations.filter((r) => r.userId === uid);
-  const deadlines = db.deadlines
-    .filter((d) => d.userId === uid && !d.completed)
-    .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
-  const dueCards = db.flashcards.filter((c) => {
-    const deck = db.decks.find((d) => d.id === c.deckId);
-    return deck?.userId === uid && new Date(c.nextReviewAt) <= new Date();
-  });
-  const today = new Date().toISOString().slice(0, 10);
-  const todayMinutes = db.studySessions
-    .filter((s) => s.userId === uid && s.date.slice(0, 10) === today)
-    .reduce((a, s) => a + s.minutes, 0);
-  const upcomingExams = db.exams.filter((e) => e.userId === uid);
-  const attempts = db.quizAttempts.filter((a) => a.userId === uid);
-  const avgQuiz =
-    attempts.length > 0 ? Math.round(attempts.reduce((a, x) => a + x.score, 0) / attempts.length) : null;
-  const essaysNeedReview = essays.filter((e) => e.reviews.length === 0);
-  const recPending = recs.filter((r) => r.status !== "submitted");
+
+  // Filter user's data
+  const apps = applications.filter((a) => a.user_id === uid);
+  const userDeadlines = deadlines.filter((d) => d.user_id === uid).sort((a, b) => a.due_at.localeCompare(b.due_at));
+  const userEssays = essays.filter((e) => e.user_id === uid);
+  const userFlashcards = flashcards.filter((c) => c.user_id === uid);
+  const userRecs = recommendations.filter((r) => r.user_id === uid);
+
+  // Compute statistics
+  const appsInProgress = apps.filter((a) => !["Accepted", "Rejected"].includes(a.application_status)).length;
+  const essaysNeedingReview = userEssays.filter((e) => !e.ai_feedback).length;
+  const recsPending = userRecs.filter((r) => r.status !== "submitted").length;
 
   return (
     <div>
       <PageHeader
         eyebrow="Dashboard"
-        title={`${greeting(profile?.fullName || "student")} 👋`}
-        description="Here’s your university and study progress."
+        title={`${greeting(profile?.full_name || "student")} 👋`}
+        description="Here's your university and study progress."
       />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Applications in progress" value={apps.filter((a) => !["accepted", "rejected"].includes(a.status)).length} />
-        <StatCard label="Upcoming deadlines" value={deadlines.length} tone="gold" hint={deadlines[0] ? `Next: ${deadlines[0].title} · ${formatDate(deadlines[0].dueAt)}` : "None yet"} />
+        <StatCard label="Applications in progress" value={appsInProgress} />
+        <StatCard 
+          label="Upcoming deadlines" 
+          value={userDeadlines.length} 
+          tone="gold" 
+          hint={userDeadlines[0] ? `Next: ${userDeadlines[0].title} · ${formatDate(userDeadlines[0].due_at)}` : "None yet"} 
+        />
         <StatCard label="Study streak" value={`${gamification?.streak ?? 0} days`} tone="study" />
       </div>
 
@@ -49,31 +45,31 @@ export default function DashboardPage() {
         <Card>
           <h2 className="font-display text-2xl">Admissions</h2>
           <ul className="mt-4 space-y-3 text-sm">
-            <li className="flex justify-between"><span>Universities saved</span><strong>{savedUnis.length}</strong></li>
-            <li className="flex justify-between"><span>Essays needing review</span><strong>{essaysNeedReview.length}</strong></li>
-            <li className="flex justify-between"><span>Sample scholarships available</span><strong>{SAMPLE_SCHOLARSHIPS.length}</strong></li>
-            <li className="flex justify-between"><span>Recommendation letters pending</span><strong>{recPending.length}</strong></li>
+            <li className="flex justify-between"><span>Active applications</span><strong>{apps.length}</strong></li>
+            <li className="flex justify-between"><span>Essays created</span><strong>{userEssays.length}</strong></li>
+            <li className="flex justify-between"><span>Essays needing review</span><strong>{essaysNeedingReview}</strong></li>
+            <li className="flex justify-between"><span>Recommendation letters pending</span><strong>{recsPending}</strong></li>
           </ul>
         </Card>
         <Card className="border-study-100 bg-study-50/40">
           <h2 className="font-display text-2xl">Study</h2>
           <ul className="mt-4 space-y-3 text-sm">
-            <li className="flex justify-between"><span>Today’s study time</span><strong>{todayMinutes} min</strong></li>
-            <li className="flex justify-between"><span>Flashcards due</span><strong>{dueCards.length}</strong></li>
-            <li className="flex justify-between"><span>Upcoming exams</span><strong>{upcomingExams.length}</strong></li>
-            <li className="flex justify-between"><span>Quiz average</span><strong>{avgQuiz === null ? "—" : `${avgQuiz}%`}</strong></li>
+            <li className="flex justify-between"><span>Flashcards created</span><strong>{userFlashcards.length}</strong></li>
+            <li className="flex justify-between"><span>Upcoming deadlines</span><strong>{userDeadlines.length}</strong></li>
+            <li className="flex justify-between"><span>Study streak</span><strong>{gamification?.streak ?? 0} days</strong></li>
+            <li className="flex justify-between"><span>XP earned</span><strong>{gamification?.xp ?? 0}</strong></li>
           </ul>
         </Card>
       </div>
 
-      {deadlines.slice(0, 3).length > 0 ? (
+      {userDeadlines.slice(0, 3).length > 0 ? (
         <Card className="mt-6">
           <h3 className="font-semibold">Closest deadlines</h3>
           <ul className="mt-3 space-y-2 text-sm">
-            {deadlines.slice(0, 3).map((d) => (
+            {userDeadlines.slice(0, 3).map((d) => (
               <li key={d.id} className="flex justify-between">
                 <span>{d.title}</span>
-                <span className="text-ink-500">{daysUntil(d.dueAt)}d · {formatDate(d.dueAt)}</span>
+                <span className="text-ink-500">{daysUntil(d.due_at)}d · {formatDate(d.due_at)}</span>
               </li>
             ))}
           </ul>
@@ -86,9 +82,9 @@ export default function DashboardPage() {
           ["/admissions/essays", "Review an essay"],
           ["/admissions/universities", "Find universities"],
           ["/admissions/scholarships", "Find scholarships"],
+          ["/admissions/applications", "Manage applications"],
           ["/study/flashcards", "Create flashcards"],
-          ["/study/tutor", "Ask AI Tutor"],
-          ["/study/planner", "Create study plan"],
+          ["/admissions/deadlines", "Track deadlines"],
         ].map(([href, label]) => (
           <Link key={href} href={href}>
             <Button variant="outline" className="w-full rounded-2xl">
